@@ -1,8 +1,9 @@
+
 #!/bin/bash
 
 # ----------------------
 # KUDU Deployment Script
-# Version: 1.0.17
+# Version: 0.2.2
 # ----------------------
 
 # Helpers
@@ -77,8 +78,8 @@ selectNodeVersion () {
       NODE_EXE=`cat "$DEPLOYMENT_TEMP/__nodeVersion.tmp"`
       exitWithMessageOnError "getting node version failed"
     fi
-    
-    if [[ -e "$DEPLOYMENT_TEMP/__npmVersion.tmp" ]]; then
+
+    if [[ -e "$DEPLOYMENT_TEMP/.tmp" ]]; then
       NPM_JS_PATH=`cat "$DEPLOYMENT_TEMP/__npmVersion.tmp"`
       exitWithMessageOnError "getting npm version failed"
     fi
@@ -109,26 +110,31 @@ fi
 # 2. Select node version
 selectNodeVersion
 
-# 3. Install npm packages
+# 3. Install NPM packages
 if [ -e "$DEPLOYMENT_TARGET/package.json" ]; then
   cd "$DEPLOYMENT_TARGET"
-  echo "Running $NPM_CMD install --production"
-  eval $NPM_CMD install 
+  eval $NPM_CMD install --production
+  eval $NPM_CMD install --only=dev
   exitWithMessageOnError "npm failed"
   cd - > /dev/null
 fi
 
-echo Handling Angular build   
-    :: 4. Build ng app
-    IF EXIST "%DEPLOYMENT_TARGET%\package.json" (
-      pushd "%DEPLOYMENT_TARGET%"
-      call :ExecuteCmd "!NODE_EXE!" ./node_modules/@angular/cli/bin/ng build --prod --env=prod --aot
-      IF !ERRORLEVEL! NEQ 0 goto error
-      :: the next line is optional to fix 404 error see section #8
-      call :ExecuteCmd cp "%DEPLOYMENT_TARGET%"/web.config "%DEPLOYMENT_TARGET%"/dist/
-      IF !ERRORLEVEL! NEQ 0 goto error
-      popd
-    )
+# 4. Angular Prod Build
+if [ -e "$DEPLOYMENT_TARGET/.angular-cli.json" ]; then
+  cd "$DEPLOYMENT_TARGET"
+  eval ./node_modules/.bin/ng build --prod
+  exitWithMessageOnError "Angular build failed"
+  cd - > /dev/null
+fi
 
 ##################################################################################################################################
+
+# Post deployment stub
+if [[ -n "$POST_DEPLOYMENT_ACTION" ]]; then
+  POST_DEPLOYMENT_ACTION=${POST_DEPLOYMENT_ACTION//\"}
+  cd "${POST_DEPLOYMENT_ACTION_DIR%\\*}"
+  "$POST_DEPLOYMENT_ACTION"
+  exitWithMessageOnError "post deployment action failed"
+fi
+
 echo "Finished successfully."
